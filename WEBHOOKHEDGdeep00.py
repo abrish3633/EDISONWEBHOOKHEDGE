@@ -45,6 +45,8 @@ if sys.platform == "win32":
 
 # ------------------- WEBHOOK SETUP -------------------
 app = Flask(__name__)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 my_uid = "6e8769164ae8eedf74dcaaeb86000f8e03d166bf5181f8eb283a4bb90e6574a2"
 
 # Global args for webhook access
