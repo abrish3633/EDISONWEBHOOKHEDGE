@@ -162,7 +162,7 @@ class FlaskServer:
 
 flask_server = FlaskServer()
 
-@app.route('/health', methods=['GET'])
+@app.route('/health-hedge', methods=['GET'])
 def health():
     return jsonify({"status": "ok", "pid": os.getpid()}), 200
 
@@ -2009,7 +2009,7 @@ def process_alert(data: Dict[str, Any]):
             log(f"{leg} TP placed/updated at {tp_price_quant}", CMD_ARGS.telegram_token, CMD_ARGS.chat_id)
 
 # ------------------- WEBHOOK ENDPOINT -------------------
-@app.route('/webhook', methods=['POST'])
+@app.route('/webhook-hedge', methods=['POST'])
 def webhook():
     if bot_state.STOP_REQUESTED:
         return "Bot stopped", 503
