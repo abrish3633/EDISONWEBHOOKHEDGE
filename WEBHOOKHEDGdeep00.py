@@ -45,8 +45,6 @@ if sys.platform == "win32":
 
 # ------------------- WEBHOOK SETUP -------------------
 app = Flask(__name__)
-from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 my_uid = "6e8769164ae8eedf74dcaaeb86000f8e03d166bf5181f8eb283a4bb90e6574a2"
 
 # Global args for webhook access
@@ -129,7 +127,7 @@ class FlaskServer:
         log(f"🌐 Flask server starting on port {port}")
         time.sleep(3)
         try:
-            requests.get(f"http://localhost:{port}/health", timeout=2)
+            requests.get(f"http://localhost:{port}/health-hedge", timeout=2)
         except:
             import socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -2010,43 +2008,61 @@ def process_alert(data: Dict[str, Any]):
             trade_state.tp = tp_price_quant
             log(f"{leg} TP placed/updated at {tp_price_quant}", CMD_ARGS.telegram_token, CMD_ARGS.chat_id)
 
-# ------------------- WEBHOOK ENDPOINT -------------------
-# ------------------- WEBHOOK SETUP (REPLICATED FROM PRODUCTION) -------------------
-app = Flask(__name__)
-
-# Removed ProxyFix to match deepdenise33's simplicity
-
-@app.route('/health', methods=['GET', 'HEAD'])
-def health():
-    return jsonify({"status": "ok", "pid": os.getpid()}), 200
-
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if bot_state.STOP_REQUESTED:
         return "Bot stopped", 503
-
-    # Direct data extraction (Replica style)
-    data = request.get_json(force=True, silent=True)
     
-    if not data:
-        raw_body = request.get_data(as_text=True)
+    # === DEBUG LOGGING - CRITICAL FOR DIAGNOSIS ===
+    raw_body = request.get_data(as_text=True)
+    content_type = request.headers.get('Content-Type', 'MISSING')
+    log(f"WEBHOOK RAW - Type: {content_type} | Length: {len(raw_body)} | Preview: {raw_body[:200]}")
+    
+    # === MULTI-STRATEGY PARSING ===
+    data = None
+    
+    # Strategy 1: Try normal JSON parsing (respects content-type)
+    if request.is_json:
         try:
+            data = request.get_json()
+            log("Parsed via is_json")
+        except:
+            pass
+    
+    # Strategy 2: Force JSON parsing (ignores content-type)
+    if not data:
+        try:
+            data = request.get_json(force=True)
+            log("Parsed via force=True")
+        except:
+            pass
+    
+    # Strategy 3: Manual JSON loading from raw body
+    if not data and raw_body:
+        try:
+            # Clean the raw body (remove BOM, trim)
             cleaned = raw_body.strip().lstrip('\ufeff')
             data = json.loads(cleaned)
+            log("Parsed via manual json.loads")
         except Exception as e:
-            log(f"FAILED: No valid JSON - Raw: {raw_body[:100]}")
-            return "Invalid JSON payload", 400
-
-    # Security Check
+            log(f"Manual parse failed: {e}")
+    
+    # === VALIDATION ===
+    if not data:
+        log(f"FAILED: No valid JSON - Raw: {raw_body[:300]}")
+        return "Invalid JSON payload", 400
+    
     uid = data.get('uid')
     if uid != my_uid:
         log(f"Invalid UID: {uid}")
         return "Invalid UID", 403
-
-    # Execute Trade Logic
+    
+    # Process in background
+    # Process in background with tiny delay to ensure transaction logs are written
     threading.Thread(target=lambda: (time.sleep(0.1), process_alert(data)), daemon=True).start()
-
+    
     return jsonify({"status": "ok"}), 200
+
 # ------------------- SCHEDULER -------------------
 def run_scheduler(bot_token: Optional[str], chat_id: Optional[str]):
     global bot_state
