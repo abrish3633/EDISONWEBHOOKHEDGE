@@ -2142,7 +2142,7 @@ def run_scheduler(bot_token: Optional[str], chat_id: Optional[str]):
         time.sleep(1)
 
 # ------------------- STATE PERSISTENCE -------------------
-STATE_FILE = 'bot_state.pkl'
+STATE_FILE = 'bot_state_hedgewehook.pkl'
 
 def save_bot_state():
     global bot_state
